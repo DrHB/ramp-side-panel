@@ -1,4 +1,4 @@
-const WS_URL = "ws://localhost:3456";
+const WS_URL = "ws://127.0.0.1:3456";
 const RECONNECT_DELAY_MS = 3000;
 
 const state = {

@@ -6,6 +6,7 @@ import {
   addMessage,
   createSession,
   deleteSession,
+  getCachedPageContext,
   getSession,
   getSessionCount,
   listSessions,
@@ -16,6 +17,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3456);
+const HOST = process.env.HOST || "127.0.0.1";
 const TOOL_ALLOWLIST = new Set([
   "Read",
   "Glob",
@@ -27,10 +29,24 @@ const TOOL_ALLOWLIST = new Set([
 
 await loadSessions();
 
-const wss = new WebSocketServer({ port: PORT });
+const wss = new WebSocketServer({
+  host: HOST,
+  port: PORT,
+  verifyClient: ({ origin, req }) => {
+    const remoteAddress = req.socket.remoteAddress;
+    const isLoopback =
+      remoteAddress === "127.0.0.1" ||
+      remoteAddress === "::1" ||
+      remoteAddress === "::ffff:127.0.0.1";
+    const allowedOrigin =
+      typeof origin === "string" && origin.startsWith("chrome-extension://");
+
+    return isLoopback && allowedOrigin;
+  },
+});
 const activeQueries = new Map();
 
-console.log(`Claude bridge server listening on ws://localhost:${PORT}`);
+console.log(`Claude bridge server listening on ws://${HOST}:${PORT}`);
 
 function summarizeSession(session) {
   const lastMessage = session.messages.at(-1) ?? null;
@@ -95,21 +111,49 @@ function extractAssistantText(message) {
 }
 
 function buildPrompt(message, pageContext) {
-  if (!pageContext) {
-    return message;
+  const sections = [];
+
+  if (pageContext) {
+    sections.push(
+      [
+        "The user is viewing a webpage. Use the page context when it is relevant.",
+        "",
+        "Page metadata:",
+        `- URL: ${pageContext.url || "(unknown url)"}`,
+        `- Title: ${pageContext.title || "(untitled page)"}`,
+        "",
+        "Extracted page text:",
+        pageContext.text || "(no text extracted)",
+      ].join("\n"),
+    );
+  }
+
+  sections.push(`User request: ${message}`);
+  return sections.join("\n\n");
+}
+
+function buildConversationPrompt(session, message, pageContext) {
+  const previousMessages = Array.isArray(session.messages) ? session.messages : [];
+  const transcriptMessages =
+    previousMessages.at(-1)?.role === "user"
+      ? previousMessages.slice(0, -1)
+      : previousMessages;
+  const recentMessages = transcriptMessages.slice(-12);
+  const transcript = recentMessages
+    .map((entry) => `${entry.role === "assistant" ? "Assistant" : "User"}: ${entry.text}`)
+    .join("\n\n");
+
+  const currentTurnPrompt = buildPrompt(message, pageContext);
+  if (!transcript) {
+    return currentTurnPrompt;
   }
 
   return [
-    "The user is viewing a webpage. Use the page context when it is relevant.",
+    "Continue the conversation below. Preserve context from the earlier turns.",
     "",
-    "Page metadata:",
-    `- URL: ${pageContext.url || "(unknown url)"}`,
-    `- Title: ${pageContext.title || "(untitled page)"}`,
+    transcript,
     "",
-    "Extracted page text:",
-    pageContext.text || "(no text extracted)",
-    "",
-    `User request: ${message}`,
+    currentTurnPrompt,
   ].join("\n");
 }
 
@@ -167,14 +211,17 @@ async function handleChat(ws, data) {
   });
   broadcastSessions();
 
-  const prompt = buildPrompt(message, data.pageContext ?? session.pageContext);
+  const conversationPrompt = buildConversationPrompt(
+    session,
+    message,
+    data.pageContext ?? getCachedPageContext(session.id) ?? session.pageContext,
+  );
   const queryHandle = query({
-    prompt,
+    prompt: conversationPrompt,
     options: {
       cwd: PROJECT_ROOT,
       includePartialMessages: true,
-      persistSession: true,
-      resume: session.sdkSessionId ?? undefined,
+      persistSession: false,
       allowedTools: [...TOOL_ALLOWLIST],
       canUseTool: async (toolName) => {
         if (TOOL_ALLOWLIST.has(toolName)) {
@@ -202,11 +249,6 @@ async function handleChat(ws, data) {
 
   try {
     for await (const sdkMessage of queryHandle) {
-      if (sdkMessage.session_id && sdkMessage.session_id !== session.sdkSessionId) {
-        session =
-          updateSession(session.id, { sdkSessionId: sdkMessage.session_id }) ?? session;
-      }
-
       if (
         sdkMessage.type === "stream_event" &&
         sdkMessage.event?.type === "content_block_delta" &&
@@ -360,4 +402,9 @@ wss.on("connection", (ws) => {
         });
     }
   });
+});
+
+wss.on("headers", (_headers, req) => {
+  const origin = req.headers.origin || "(missing origin)";
+  console.log(`WebSocket client connected from origin: ${origin}`);
 });

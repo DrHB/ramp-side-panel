@@ -10,6 +10,7 @@ const VALID_STATUSES = new Set(["active", "draft", "done"]);
 
 let sessions = [];
 let persistQueue = Promise.resolve();
+const pageContextCache = new Map();
 
 function clone(value) {
   return structuredClone(value);
@@ -34,6 +35,19 @@ function normalizePageContext(pageContext) {
   return { url, title, text, capturedAt };
 }
 
+function pageContextMetadata(pageContext) {
+  if (!pageContext) {
+    return null;
+  }
+
+  return {
+    url: pageContext.url,
+    title: pageContext.title,
+    text: "",
+    capturedAt: pageContext.capturedAt,
+  };
+}
+
 function normalizeMessage(message) {
   return {
     id: String(message.id ?? randomUUID()),
@@ -47,6 +61,11 @@ function normalizeSession(session) {
   const createdAt = String(session.createdAt ?? new Date().toISOString());
   const updatedAt = String(session.updatedAt ?? createdAt);
   const status = VALID_STATUSES.has(session.status) ? session.status : "active";
+  const normalizedPageContext = normalizePageContext(session.pageContext);
+
+  if (normalizedPageContext?.text) {
+    pageContextCache.set(String(session.id ?? ""), normalizedPageContext);
+  }
 
   return {
     id: String(session.id ?? randomUUID()),
@@ -55,7 +74,7 @@ function normalizeSession(session) {
     createdAt,
     updatedAt,
     sdkSessionId: session.sdkSessionId ? String(session.sdkSessionId) : null,
-    pageContext: normalizePageContext(session.pageContext),
+    pageContext: pageContextMetadata(normalizedPageContext),
     messages: Array.isArray(session.messages)
       ? session.messages.map(normalizeMessage)
       : [],
@@ -74,9 +93,13 @@ function schedulePersist() {
     .catch(() => {})
     .then(async () => {
       await mkdir(DATA_DIR, { recursive: true });
+      const persistedSessions = sessions.map((session) => ({
+        ...session,
+        pageContext: pageContextMetadata(session.pageContext),
+      }));
       await writeFile(
         STORE_PATH,
-        JSON.stringify({ sessions }, null, 2),
+        JSON.stringify({ sessions: persistedSessions }, null, 2),
         "utf8",
       );
     })
@@ -109,6 +132,7 @@ export async function loadSessions() {
 
 export function createSession({ title, pageContext } = {}) {
   const createdAt = new Date().toISOString();
+  const normalizedPageContext = normalizePageContext(pageContext);
   const session = normalizeSession({
     id: randomUUID(),
     title: title?.trim() || "New chat",
@@ -116,9 +140,13 @@ export function createSession({ title, pageContext } = {}) {
     createdAt,
     updatedAt: createdAt,
     sdkSessionId: null,
-    pageContext,
+    pageContext: normalizedPageContext,
     messages: [],
   });
+
+  if (normalizedPageContext?.text) {
+    pageContextCache.set(session.id, normalizedPageContext);
+  }
 
   sessions.unshift(session);
   void schedulePersist();
@@ -179,7 +207,14 @@ export function updateSession(id, updates = {}) {
   }
 
   if ("pageContext" in updates) {
-    session.pageContext = normalizePageContext(updates.pageContext);
+    const normalizedPageContext = normalizePageContext(updates.pageContext);
+    session.pageContext = pageContextMetadata(normalizedPageContext);
+
+    if (normalizedPageContext?.text) {
+      pageContextCache.set(id, normalizedPageContext);
+    } else {
+      pageContextCache.delete(id);
+    }
   }
 
   session.updatedAt = new Date().toISOString();
@@ -195,6 +230,7 @@ export function deleteSession(id) {
   }
 
   const [removed] = sessions.splice(index, 1);
+  pageContextCache.delete(id);
   void schedulePersist();
   return clone(removed);
 }
@@ -209,4 +245,9 @@ export function getSessionCount() {
   }
 
   return counts;
+}
+
+export function getCachedPageContext(id) {
+  const pageContext = pageContextCache.get(id);
+  return pageContext ? clone(pageContext) : null;
 }

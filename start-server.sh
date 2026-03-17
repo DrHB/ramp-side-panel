@@ -3,15 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-3456}"
+HOST="${HOST:-127.0.0.1}"
 LOG_FILE="${TMPDIR:-/tmp}/claude-side-panel-server.log"
 
-if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Server already running on ws://localhost:$PORT"
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN | grep -q "$HOST:$PORT\\|\\*:$PORT"; then
+  echo "Server already running on ws://$HOST:$PORT"
   exit 0
 fi
 
 cd "$ROOT_DIR"
-nohup node server/index.js >"$LOG_FILE" 2>&1 &
+HOST="$HOST" PORT="$PORT" nohup node server/index.js </dev/null >"$LOG_FILE" 2>&1 &
 
-echo "Server started on ws://localhost:$PORT (PID: $!)"
+echo "Server started on ws://$HOST:$PORT (PID: $!)"
 echo "Logs: $LOG_FILE"
