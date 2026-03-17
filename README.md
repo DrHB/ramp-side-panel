@@ -6,11 +6,9 @@ A Chrome extension that adds a **Claude AI chat side panel** alongside any webpa
 
 ## Demo
 
-https://github.com/user-attachments/assets/demo_video.mov
+https://github.com/DrHB/ramp-side-panel/raw/main/assets/demo_video.mov
 
-https://github.com/drhb/ramp-side-panel/assets/demo_video.mov
-
-> *The demo video is in [`assets/demo_video.mov`](assets/demo_video.mov). If the embed above doesn't render, download it directly.*
+> *Demo video: [`assets/demo_video.mov`](assets/demo_video.mov) — click the link above or download from the repo to watch.*
 
 ## How it works
 
