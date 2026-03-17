@@ -1,0 +1,14 @@
+{
+  "name": "claude-side-panel-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.77",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Ramp Side Panel",
+  "version": "1.0.0",
+  "description": "Chat with Claude alongside any webpage — Ramp Inspect style.",
+  "permissions": ["sidePanel", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Open Ramp Side Panel"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

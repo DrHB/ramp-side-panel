@@ -1,0 +1,10 @@
+{
+  "name": "claude-side-panel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "server": "node server/index.js",
+    "install:server": "npm --prefix server install",
+    "setup": "npm run install:server"
+  }
+}
