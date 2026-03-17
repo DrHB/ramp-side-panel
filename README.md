@@ -14,7 +14,7 @@ A Chrome extension that adds a **Claude AI chat side panel** alongside any webpa
 Chrome Side Panel  ←→  Local WebSocket Server  ←→  Claude Agent SDK  ←→  Claude Code CLI
 ```
 
-1. A small **Node.js WebSocket server** runs locally on `127.0.0.1:3456`
+1. A small **Node.js WebSocket server** runs locally on `localhost:3456`
 2. It uses the **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) which wraps your local Claude Code CLI
 3. The Chrome extension's **side panel** connects to the server via WebSocket
 4. A **content script** extracts page text, so Claude can see what you're looking at
@@ -45,7 +45,7 @@ npm run setup
 npm run server
 ```
 
-You should see: `Claude bridge server listening on ws://127.0.0.1:3456`
+You should see: `Claude bridge server listening on ws://localhost:3456`
 
 ### 3. Load the Chrome extension
 
@@ -66,14 +66,6 @@ You should see: `Claude bridge server listening on ws://127.0.0.1:3456`
 - **Node.js 18+**
 - **Claude Code CLI** installed and authenticated (`claude` command available in terminal)
 - **Chrome 114+**
-
-## Security Notes
-
-- The bridge now binds to loopback only: `127.0.0.1:3456`
-- The bridge rejects non-extension WebSocket origins, which blocks ordinary web pages from talking to the local Claude bridge
-- Raw extracted page text is kept in memory for the active session but is not persisted into `server/data/sessions.json`
-- The server no longer asks the Claude SDK to persist sessions under `~/.claude/projects`; follow-up turns are replayed from the local session history instead
-- Chat history and session metadata are still stored locally on disk for resume/history
 
 ## Project Structure
 
